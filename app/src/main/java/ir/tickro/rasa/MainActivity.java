@@ -12,6 +12,8 @@ import android.os.Bundle;
 import android.os.Build;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.ConsoleMessage;
+import android.webkit.PermissionRequest;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -59,11 +61,13 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     private ValueCallback<Uri> mUploadMessage;
     private final static int FILECHOOSER_RESULTCODE = 1;
 
+    private static final String DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2049.0 Safari/537.36";
     private static final String TAG = MainActivity.class.getSimpleName();
     private String mCM;
     private ValueCallback<Uri> mUM;
     private ValueCallback<Uri[]> mUMA;
-
+    Context context = null;
+    Activity activity = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,13 +77,15 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         setContentView(R.layout.activity_main);
         loadSite();
+        context = this;
+        activity = this;
     }
 
 
     @AfterPermissionGranted(100)
     private void loadSite() {
 
-        String[] perms = {Manifest.permission.CAMERA, Manifest.permission.READ_EXTERNAL_STORAGE};
+        String[] perms = {Manifest.permission.CAMERA, Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO};
         boolean granted = EasyPermissions.hasPermissions(this, perms);
 
         if (granted) {
@@ -120,6 +126,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         settings.setPluginState(WebSettings.PluginState.ON);
         settings.setMediaPlaybackRequiresUserGesture(false);
 
+        settings.setUserAgentString(DESKTOP_USER_AGENT);
         settings.setAllowFileAccess(true);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -138,12 +145,35 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
         rasaWebView.setWebViewClient(new MyWebViewClient());
         rasaWebView.loadUrl("https://rasa.tickro.ir");
-        rasaWebView.setWebChromeClient(new WebChromeClient()
-        {
+        rasaWebView.setWebChromeClient(new WebChromeClient() {
+
+            public void onPermissionRequest(PermissionRequest request) {
+                request.grant(request.getResources());
+
+//                for (String permission : request.getResources()) {
+//                    switch (permission) {
+//                        case "android.webkit.resource.AUDIO_CAPTURE": {
+//                            String[] perms = {Manifest.permission.RECORD_AUDIO};
+//                            EasyPermissions.requestPermissions(activity, "We need permissions because this and that", 1000,perms);
+//                            break;
+//                        }  case "android.webkit.resource.VIDEO_CAPTURE": {
+//                            String[] perms1 = {Manifest.permission.CAMERA};
+//                            EasyPermissions.requestPermissions(activity, "We need permissions because this and that", 1000,perms1);
+//                            break;
+//                        }
+//                    }
+//                }
+            }
+
+            public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+              Log.i("rasatag", consoleMessage.message());
+              return  true;
+            }
+
+
             // For 3.0+ Devices (Start)
             // onActivityResult attached before constructor
-            protected void openFileChooser(ValueCallback uploadMsg, String acceptType)
-            {
+            protected void openFileChooser(ValueCallback uploadMsg, String acceptType) {
                 mUploadMessage = uploadMsg;
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
@@ -153,8 +183,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
 
             // For Lollipop 5.0+ Devices
-            public boolean onShowFileChooser(WebView mWebView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams)
-            {
+            public boolean onShowFileChooser(WebView mWebView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams) {
                 if (uploadMessage != null) {
                     uploadMessage.onReceiveValue(null);
                     uploadMessage = null;
@@ -166,11 +195,9 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
                     intent = fileChooserParams.createIntent();
                 }
-                try
-                {
+                try {
                     startActivityForResult(intent, REQUEST_SELECT_FILE);
-                } catch ( android.content.ActivityNotFoundException e)
-                {
+                } catch (android.content.ActivityNotFoundException e) {
                     uploadMessage = null;
                     return false;
                 }
@@ -178,8 +205,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
             }
 
             //For Android 4.1 only
-            protected void openFileChooser(ValueCallback<Uri> uploadMsg, String acceptType, String capture)
-            {
+            protected void openFileChooser(ValueCallback<Uri> uploadMsg, String acceptType, String capture) {
                 mUploadMessage = uploadMsg;
                 Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -187,8 +213,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
                 startActivityForResult(Intent.createChooser(intent, "File Browser"), FILECHOOSER_RESULTCODE);
             }
 
-            protected void openFileChooser(ValueCallback<Uri> uploadMsg)
-            {
+            protected void openFileChooser(ValueCallback<Uri> uploadMsg) {
                 mUploadMessage = uploadMsg;
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
@@ -200,20 +225,15 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     }
 
     @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent intent)
-    {
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-        {
-            if (requestCode == REQUEST_SELECT_FILE)
-            {
+    public void onActivityResult(int requestCode, int resultCode, Intent intent) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            if (requestCode == REQUEST_SELECT_FILE) {
                 if (uploadMessage == null)
                     return;
                 uploadMessage.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, intent));
                 uploadMessage = null;
             }
-        }
-        else if (requestCode == FILECHOOSER_RESULTCODE)
-        {
+        } else if (requestCode == FILECHOOSER_RESULTCODE) {
             if (null == mUploadMessage)
                 return;
             // Use MainActivity.RESULT_OK if you're implementing WebView inside Fragment
